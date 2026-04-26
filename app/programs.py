@@ -15,6 +15,7 @@ PROGRAMS = {
             "D: Fish Curry + Millet Roti",
         ],
         "calories": 2000,
+        "calorie_factor": 22,
     },
     "muscle-gain": {
         "code": "MG",
@@ -33,6 +34,7 @@ PROGRAMS = {
             "D: Mutton Curry + Jeera Rice",
         ],
         "calories": 3200,
+        "calorie_factor": 35,
     },
     "beginner": {
         "code": "BG",
@@ -46,7 +48,17 @@ PROGRAMS = {
             "Protein: 120g/day",
         ],
         "calories": 2400,
+        "calorie_factor": 26,
     },
 }
 
 SITE_METRICS = {"capacity_users": 150, "area_sqft": 10000, "break_even_members": 250}
+
+
+def estimate_calories(program_key: str, weight_kg: float) -> int:
+    program = PROGRAMS.get(program_key)
+    if program is None:
+        raise KeyError(program_key)
+    if weight_kg <= 0:
+        raise ValueError("weight must be positive")
+    return int(weight_kg * program["calorie_factor"])
