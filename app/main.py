@@ -1,15 +1,16 @@
 import os
 
-from flask import Flask, abort, jsonify, request
+from flask import Flask, Response, abort, jsonify, request
 
 from app.auth import user_store
 from app.clients import store
 from app.membership import membership_store
 from app.programs import PROGRAMS, SITE_METRICS, estimate_calories, generate_ai_program
 from app.progress import progress_store
+from app.reports import build_client_pdf
 from app.workouts import workout_store
 
-APP_VERSION = "3.1.2"
+APP_VERSION = "3.2.4"
 
 
 def create_app() -> Flask:
@@ -32,6 +33,7 @@ def create_app() -> Flask:
                     "/workouts/<id>/exercises",
                     "/clients/<name>/membership",
                     "/clients/<name>/ai-plan",
+                    "/clients/<name>/report.pdf",
                     "/auth/login",
                 ],
             }
@@ -230,6 +232,28 @@ def create_app() -> Flask:
         except (ValueError, TypeError) as e:
             abort(400, description=str(e))
         return jsonify(s), 201
+
+    # ---------- PDF report ----------
+    @app.get("/clients/<name>/report.pdf")
+    def client_report_pdf(name: str):
+        record = store.get(name)
+        if record is None:
+            abort(404, description=f"Client '{name}' not found")
+        prog = progress_store.for_client(name)
+        workouts = workout_store.for_client(name)
+        avg = sum(e["adherence"] for e in prog) / len(prog) if prog else None
+        summary = {
+            "progress_entries": len(prog),
+            "avg_adherence": avg,
+            "workout_count": len(workouts),
+            "total_minutes": sum(w.get("duration_min") or 0 for w in workouts),
+        }
+        pdf_bytes = build_client_pdf(record, summary)
+        return Response(
+            pdf_bytes,
+            mimetype="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={name}_report.pdf"},
+        )
 
     # ---------- AI-style program generator ----------
     @app.post("/clients/<name>/ai-plan")
