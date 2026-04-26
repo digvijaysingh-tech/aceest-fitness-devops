@@ -2,12 +2,14 @@ import os
 
 from flask import Flask, abort, jsonify, request
 
+from app.auth import user_store
 from app.clients import store
+from app.membership import membership_store
 from app.programs import PROGRAMS, SITE_METRICS, estimate_calories
 from app.progress import progress_store
 from app.workouts import workout_store
 
-APP_VERSION = "2.2.4"
+APP_VERSION = "3.0.1"
 
 
 def create_app() -> Flask:
@@ -28,6 +30,8 @@ def create_app() -> Flask:
                     "/clients/<name>/workouts",
                     "/clients/<name>/summary",
                     "/workouts/<id>/exercises",
+                    "/clients/<name>/membership",
+                    "/auth/login",
                 ],
             }
         )
@@ -205,6 +209,41 @@ def create_app() -> Flask:
             "workout_count": len(workouts),
             "total_minutes": sum(w.get("duration_min") or 0 for w in workouts),
         })
+
+    # ---------- Membership ----------
+    @app.get("/clients/<name>/membership")
+    def get_membership(name: str):
+        s = membership_store.status(name)
+        if s is None:
+            abort(404, description=f"Client '{name}' not found")
+        return jsonify(s)
+
+    @app.post("/clients/<name>/membership")
+    def activate_membership(name: str):
+        data = request.get_json(silent=True) or {}
+        try:
+            months = int(data.get("months", 1))
+            s = membership_store.activate(name, months=months)
+        except LookupError as e:
+            abort(404, description=str(e))
+        except (ValueError, TypeError) as e:
+            abort(400, description=str(e))
+        return jsonify(s), 201
+
+    # ---------- Auth ----------
+    @app.post("/auth/login")
+    def login():
+        data = request.get_json(silent=True) or {}
+        user = user_store.verify(
+            data.get("username", ""), data.get("password", "")
+        )
+        if not user:
+            abort(401, description="invalid credentials")
+        return jsonify({"authenticated": True, **user})
+
+    @app.errorhandler(401)
+    def unauthorized(err):
+        return jsonify({"error": "unauthorized", "message": str(err.description)}), 401
 
     @app.errorhandler(400)
     def bad_request(err):
