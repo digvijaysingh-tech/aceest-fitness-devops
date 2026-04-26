@@ -4,8 +4,9 @@ from flask import Flask, abort, jsonify, request
 
 from app.clients import store
 from app.programs import PROGRAMS, SITE_METRICS, estimate_calories
+from app.progress import progress_store
 
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.1.2"
 
 
 def create_app() -> Flask:
@@ -18,14 +19,11 @@ def create_app() -> Flask:
                 "service": "ACEest Fitness & Gym",
                 "version": APP_VERSION,
                 "endpoints": [
-                    "/health",
-                    "/version",
-                    "/programs",
-                    "/programs/<key>",
+                    "/health", "/version", "/metrics",
+                    "/programs", "/programs/<key>",
                     "/programs/<key>/calories?weight=<kg>",
-                    "/metrics",
-                    "/clients",
-                    "/clients/<name>",
+                    "/clients", "/clients/<name>",
+                    "/clients/<name>/progress",
                 ],
             }
         )
@@ -112,6 +110,29 @@ def create_app() -> Flask:
         if not store.delete(name):
             abort(404, description=f"Client '{name}' not found")
         return "", 204
+
+    # ---------- Progress ----------
+    @app.get("/clients/<name>/progress")
+    def get_progress(name: str):
+        if store.get(name) is None:
+            abort(404, description=f"Client '{name}' not found")
+        entries = progress_store.for_client(name)
+        return jsonify({"client_name": name, "count": len(entries), "entries": entries})
+
+    @app.post("/clients/<name>/progress")
+    def log_progress(name: str):
+        data = request.get_json(silent=True) or {}
+        try:
+            entry = progress_store.log(
+                client_name=name,
+                week=data.get("week", "").strip(),
+                adherence=int(data.get("adherence", -1)),
+            )
+        except LookupError as e:
+            abort(404, description=str(e))
+        except (ValueError, TypeError) as e:
+            abort(400, description=str(e))
+        return jsonify(entry), 201
 
     @app.errorhandler(400)
     def bad_request(err):

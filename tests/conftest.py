@@ -4,8 +4,10 @@ import pytest
 
 from app import clients as clients_mod
 from app import db as db_mod
+from app import progress as progress_mod
 from app.clients import ClientStore
 from app.main import create_app
+from app.progress import ProgressStore
 
 
 @pytest.fixture(autouse=True)
@@ -15,6 +17,7 @@ def _tmp_db(tmp_path, monkeypatch):
     monkeypatch.setenv("ACEEST_DB_PATH", str(db_file))
     monkeypatch.setattr(db_mod, "DEFAULT_DB_PATH", str(db_file))
     monkeypatch.setattr(clients_mod, "store", ClientStore(str(db_file)))
+    monkeypatch.setattr(progress_mod, "progress_store", ProgressStore(str(db_file)))
     yield
     db_mod.reset_initialized_cache()
 
