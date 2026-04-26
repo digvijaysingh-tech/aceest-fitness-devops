@@ -1,0 +1,11 @@
+[run]
+source = app
+relative_files = True
+omit =
+    tests/*
+    versions/*
+    .venv/*
+
+[report]
+show_missing = True
+skip_empty = True

@@ -7,7 +7,7 @@ pipeline {
         IMAGE_TAG           = "${env.BUILD_NUMBER}"
         FULL_IMAGE          = "${DOCKERHUB_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
         LATEST_IMAGE        = "${DOCKERHUB_NAMESPACE}/${IMAGE_NAME}:latest"
-        SONAR_HOST_URL      = 'http://host.docker.internal:9000'
+        SONAR_HOST_URL      = 'http://host.docker.internal:9001'
     }
 
     options {
