@@ -8,7 +8,7 @@ BITS M.Tech Assignment 2 — end-to-end DevOps pipeline for the ACEest Fitness &
 - **VCS:** Git + GitHub (`digvijaysingh-tech/aceest-fitness-devops`)
 - **CI:** Jenkins (local) with polling SCM
 - **Quality:** SonarQube (local, Docker)
-- **Container:** Docker, images pushed to `digvijaysinghshekhawat/aceest-fitness` on Docker Hub
+- **Container:** Docker, images pushed to [`dshekhawat06640/aceest-fitness`](https://hub.docker.com/r/dshekhawat06640/aceest-fitness/tags) on Docker Hub
 - **Orchestration:** Minikube (local Kubernetes)
 - **Deployment strategies:** Blue-Green, Canary, Rolling Update, A/B Testing, Shadow
 
