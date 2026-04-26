@@ -29,18 +29,15 @@ pipeline {
         }
 
         stage('Install & Test') {
-            agent {
-                docker {
-                    image 'python:3.12-slim'
-                    reuseNode true
-                }
-            }
             steps {
                 sh '''
                     set -e
-                    python -m pip install --upgrade pip
-                    pip install -r requirements-dev.txt
-                    pytest --junitxml=pytest-report.xml
+                    # Use a disposable Python container; mount the workspace in and run pytest there.
+                    docker run --rm \
+                      -v "$WORKSPACE:/work" \
+                      -w /work \
+                      python:3.12-slim \
+                      sh -c "pip install --quiet --root-user-action=ignore -r requirements-dev.txt && pytest --junitxml=pytest-report.xml"
                 '''
             }
             post {
@@ -51,14 +48,27 @@ pipeline {
         }
 
         stage('SonarQube Scan') {
-            when { expression { fileExists('sonar/sonar-project.properties') } }
+            when {
+                allOf {
+                    expression { fileExists('sonar/sonar-project.properties') }
+                    expression {
+                        // only attempt if Sonar is reachable and token is configured
+                        def reachable = sh(
+                            script: "curl -sf -o /dev/null -m 3 ${SONAR_HOST_URL}/api/system/status && echo up || echo down",
+                            returnStdout: true
+                        ).trim()
+                        echo "SonarQube status: ${reachable}"
+                        return reachable == 'up'
+                    }
+                }
+            }
             steps {
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                     sh '''
                         docker run --rm \
                           -e SONAR_HOST_URL=${SONAR_HOST_URL} \
                           -e SONAR_TOKEN=${SONAR_TOKEN} \
-                          -v "$PWD:/usr/src" \
+                          -v "$WORKSPACE:/usr/src" \
                           sonarsource/sonar-scanner-cli:latest \
                           -Dproject.settings=sonar/sonar-project.properties
                     '''
@@ -93,18 +103,25 @@ pipeline {
             }
         }
 
-        stage('Deploy to Minikube (rolling-update)') {
-            when { branch 'main' }
+        stage('Deploy to Minikube') {
+            when {
+                allOf {
+                    branch 'main'
+                    expression {
+                        // only if kubectl is installed AND a cluster is reachable
+                        def hasKubectl = sh(script: 'command -v kubectl >/dev/null && echo yes || echo no', returnStdout: true).trim()
+                        if (hasKubectl != 'yes') { echo 'kubectl not installed on Jenkins agent, skipping deploy'; return false }
+                        def clusterUp = sh(script: 'kubectl cluster-info --request-timeout=3s >/dev/null 2>&1 && echo up || echo down', returnStdout: true).trim()
+                        echo "Cluster status: ${clusterUp}"
+                        return clusterUp == 'up'
+                    }
+                }
+            }
             steps {
                 sh '''
-                    if [ -f k8s/rolling-update/deployment.yaml ]; then
-                        sed "s|IMAGE_PLACEHOLDER|${FULL_IMAGE}|g" \
-                            k8s/rolling-update/deployment.yaml | kubectl apply -f -
-                        kubectl apply -f k8s/rolling-update/service.yaml
-                        kubectl rollout status deployment/aceest-fitness --timeout=120s
-                    else
-                        echo "k8s manifests not present yet, skipping deploy"
-                    fi
+                    kubectl apply -f k8s/rolling-update/
+                    kubectl set image deployment/aceest-fitness aceest-fitness=${FULL_IMAGE} --record
+                    kubectl rollout status deployment/aceest-fitness --timeout=120s
                 '''
             }
         }
@@ -112,10 +129,10 @@ pipeline {
 
     post {
         success {
-            echo "Build ${env.BUILD_NUMBER} pushed as ${FULL_IMAGE}"
+            echo "Build ${env.BUILD_NUMBER} succeeded. Image: ${FULL_IMAGE}"
         }
         failure {
-            echo "Build ${env.BUILD_NUMBER} failed — check stage logs above"
+            echo "Build ${env.BUILD_NUMBER} failed. Check stage logs."
         }
         always {
             sh 'docker image prune -f --filter "until=24h" || true'
