@@ -2,9 +2,10 @@ import os
 
 from flask import Flask, abort, jsonify, request
 
+from app.clients import store
 from app.programs import PROGRAMS, SITE_METRICS, estimate_calories
 
-APP_VERSION = "1.1"
+APP_VERSION = "1.1.2"
 
 
 def create_app() -> Flask:
@@ -23,6 +24,8 @@ def create_app() -> Flask:
                     "/programs/<key>",
                     "/programs/<key>/calories?weight=<kg>",
                     "/metrics",
+                    "/clients",
+                    "/clients/<name>",
                 ],
             }
         )
@@ -74,6 +77,41 @@ def create_app() -> Flask:
     @app.get("/metrics")
     def metrics():
         return jsonify(SITE_METRICS)
+
+    # ---------- Clients ----------
+    @app.get("/clients")
+    def list_clients():
+        clients = store.list()
+        return jsonify({"count": len(clients), "clients": clients})
+
+    @app.post("/clients")
+    def create_client():
+        data = request.get_json(silent=True) or {}
+        try:
+            record = store.save(
+                name=data.get("name", "").strip(),
+                age=int(data.get("age", 0)),
+                weight=float(data.get("weight_kg", 0)),
+                program=data.get("program", ""),
+                adherence=int(data.get("adherence", 0)),
+                notes=data.get("notes", ""),
+            )
+        except (ValueError, TypeError) as e:
+            abort(400, description=str(e))
+        return jsonify(record), 201
+
+    @app.get("/clients/<name>")
+    def get_client(name: str):
+        record = store.get(name)
+        if record is None:
+            abort(404, description=f"Client '{name}' not found")
+        return jsonify(record)
+
+    @app.delete("/clients/<name>")
+    def delete_client(name: str):
+        if not store.delete(name):
+            abort(404, description=f"Client '{name}' not found")
+        return "", 204
 
     @app.errorhandler(400)
     def bad_request(err):
