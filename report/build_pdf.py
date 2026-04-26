@@ -445,8 +445,51 @@ def sec_outcomes(pdf: PDF):
     ])
 
 
+def sec_evidence(pdf: PDF):
+    section_header(pdf, "7. SonarQube Evidence")
+
+    para(pdf,
+        "The following screenshots were captured from the local SonarQube Community "
+        "Edition instance (http://localhost:9001) after the scanner uploaded the final "
+        "analysis. The dashboard confirms the Quality Gate Passed status on 793 lines "
+        "of code with coverage, duplication, and hotspot thresholds all met.")
+
+    h2(pdf, "7.1  Project Overview - Quality Gate Passed")
+    para(pdf,
+        "The Overview tab shows the New Code perspective for Version 3.2.4: "
+        "0 new issues, 0 accepted issues, 97.8% coverage on 227 new lines "
+        "(threshold >= 80%), 0.0% duplications on 387 new lines (threshold "
+        "<= 3.0%), and 0 security hotspots - Security Rating A. The single "
+        "warning banner is the informational notice about the already-suppressed "
+        "python:S104 rule; the gate itself passed cleanly.")
+
+    img_path = str(ROOT / "report" / "screenshots" / "sonar-overview.png")
+    img_w = USABLE_W
+    try:
+        pdf.image(img_path, x=MARGIN, w=img_w)
+    except Exception as e:
+        para(pdf, f"(screenshot not embeddable: {e})")
+    pdf.ln(3)
+
+    h2(pdf, "7.2  Activity Timeline - 4 scans, issues 2 -> 0")
+    para(pdf,
+        "The Activity panel tracks every scan submitted from sonar-scanner-cli. "
+        "The line graph falls from 2 issues at 9:30 PM to 0 issues at 9:35 PM. "
+        "Between 9:31 and 9:33 the coverage swung +93.9% (after fixing the "
+        ".coveragerc relative_files issue) and the quality gate briefly failed "
+        "as the refactor introduced a new issue that was immediately resolved. "
+        "The final 9:35 PM run is the Version 3.2.4 release scan - gate Passed "
+        "with -1 issue vs previous run.")
+
+    img_path = str(ROOT / "report" / "screenshots" / "sonar-activity.png")
+    try:
+        pdf.image(img_path, x=MARGIN, w=img_w)
+    except Exception as e:
+        para(pdf, f"(screenshot not embeddable: {e})")
+
+
 def sec_checklist(pdf: PDF):
-    section_header(pdf, "7. Submission Checklist")
+    section_header(pdf, "8. Submission Checklist")
 
     para(pdf,
         "Every deliverable called out in the assignment brief is present in the "
@@ -515,6 +558,7 @@ def main():
     sec_deployment(pdf)
     sec_challenges(pdf)
     sec_outcomes(pdf)
+    sec_evidence(pdf)
     sec_checklist(pdf)
     pdf.output(str(OUT))
     print(f"Wrote {OUT}")
