@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aceest-fitness-primary
+  labels:
+    app: aceest-fitness
+    role: primary
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: aceest-fitness
+      role: primary
+  template:
+    metadata:
+      labels:
+        app: aceest-fitness
+        role: primary
+    spec:
+      containers:
+        - name: aceest-fitness
+          image: dshekhawat06640/aceest-fitness:3.1.2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+          readinessProbe:
+            httpGet: { path: /health, port: 5000 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: { cpu: "50m", memory: "96Mi" }
+            limits:   { cpu: "250m", memory: "256Mi" }
