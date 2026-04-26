@@ -5,7 +5,7 @@ from flask import Flask, abort, jsonify, request
 from app.clients import store
 from app.programs import PROGRAMS, SITE_METRICS, estimate_calories
 
-APP_VERSION = "1.1.2"
+APP_VERSION = "2.0.1"
 
 
 def create_app() -> Flask:
