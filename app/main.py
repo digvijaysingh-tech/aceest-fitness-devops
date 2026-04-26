@@ -5,8 +5,9 @@ from flask import Flask, abort, jsonify, request
 from app.clients import store
 from app.programs import PROGRAMS, SITE_METRICS, estimate_calories
 from app.progress import progress_store
+from app.workouts import workout_store
 
-APP_VERSION = "2.1.2"
+APP_VERSION = "2.2.1"
 
 
 def create_app() -> Flask:
@@ -24,6 +25,7 @@ def create_app() -> Flask:
                     "/programs/<key>/calories?weight=<kg>",
                     "/clients", "/clients/<name>",
                     "/clients/<name>/progress",
+                    "/clients/<name>/workouts",
                 ],
             }
         )
@@ -133,6 +135,31 @@ def create_app() -> Flask:
         except (ValueError, TypeError) as e:
             abort(400, description=str(e))
         return jsonify(entry), 201
+
+    # ---------- Workouts ----------
+    @app.get("/clients/<name>/workouts")
+    def list_workouts(name: str):
+        if store.get(name) is None:
+            abort(404, description=f"Client '{name}' not found")
+        workouts = workout_store.for_client(name)
+        return jsonify({"client_name": name, "count": len(workouts), "workouts": workouts})
+
+    @app.post("/clients/<name>/workouts")
+    def add_workout(name: str):
+        data = request.get_json(silent=True) or {}
+        try:
+            workout = workout_store.add(
+                client_name=name,
+                workout_date=data.get("date", "").strip(),
+                workout_type=data.get("type", "").strip(),
+                duration_min=int(data.get("duration_min", 0)),
+                notes=data.get("notes", ""),
+            )
+        except LookupError as e:
+            abort(404, description=str(e))
+        except (ValueError, TypeError) as e:
+            abort(400, description=str(e))
+        return jsonify(workout), 201
 
     @app.errorhandler(400)
     def bad_request(err):
