@@ -1,0 +1,124 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKERHUB_NAMESPACE = 'dshekhawat06640'
+        IMAGE_NAME          = 'aceest-fitness'
+        IMAGE_TAG           = "${env.BUILD_NUMBER}"
+        FULL_IMAGE          = "${DOCKERHUB_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
+        LATEST_IMAGE        = "${DOCKERHUB_NAMESPACE}/${IMAGE_NAME}:latest"
+        SONAR_HOST_URL      = 'http://host.docker.internal:9000'
+    }
+
+    options {
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    triggers {
+        pollSCM('H/5 * * * *')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                sh 'git log -1 --oneline'
+            }
+        }
+
+        stage('Install & Test') {
+            agent {
+                docker {
+                    image 'python:3.12-slim'
+                    reuseNode true
+                }
+            }
+            steps {
+                sh '''
+                    set -e
+                    python -m pip install --upgrade pip
+                    pip install -r requirements-dev.txt
+                    pytest --junitxml=pytest-report.xml
+                '''
+            }
+            post {
+                always {
+                    junit testResults: 'pytest-report.xml', allowEmptyResults: true
+                }
+            }
+        }
+
+        stage('SonarQube Scan') {
+            when { expression { fileExists('sonar/sonar-project.properties') } }
+            steps {
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                    sh '''
+                        docker run --rm \
+                          -e SONAR_HOST_URL=${SONAR_HOST_URL} \
+                          -e SONAR_TOKEN=${SONAR_TOKEN} \
+                          -v "$PWD:/usr/src" \
+                          sonarsource/sonar-scanner-cli:latest \
+                          -Dproject.settings=sonar/sonar-project.properties
+                    '''
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh '''
+                    docker build -t ${FULL_IMAGE} -t ${LATEST_IMAGE} -f docker/Dockerfile .
+                    docker images | grep ${IMAGE_NAME} | head -5
+                '''
+            }
+        }
+
+        stage('Docker Push') {
+            when { branch 'main' }
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push ${FULL_IMAGE}
+                        docker push ${LATEST_IMAGE}
+                        docker logout
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Minikube (rolling-update)') {
+            when { branch 'main' }
+            steps {
+                sh '''
+                    if [ -f k8s/rolling-update/deployment.yaml ]; then
+                        sed "s|IMAGE_PLACEHOLDER|${FULL_IMAGE}|g" \
+                            k8s/rolling-update/deployment.yaml | kubectl apply -f -
+                        kubectl apply -f k8s/rolling-update/service.yaml
+                        kubectl rollout status deployment/aceest-fitness --timeout=120s
+                    else
+                        echo "k8s manifests not present yet, skipping deploy"
+                    fi
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Build ${env.BUILD_NUMBER} pushed as ${FULL_IMAGE}"
+        }
+        failure {
+            echo "Build ${env.BUILD_NUMBER} failed — check stage logs above"
+        }
+        always {
+            sh 'docker image prune -f --filter "until=24h" || true'
+        }
+    }
+}
