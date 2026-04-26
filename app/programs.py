@@ -54,6 +54,24 @@ PROGRAMS = {
 
 SITE_METRICS = {"capacity_users": 150, "area_sqft": 10000, "break_even_members": 250}
 
+AI_TEMPLATES = {
+    "fat-loss": [
+        "Full Body HIIT 3x/week + 2 Zone-2 Cardio sessions",
+        "Circuit Training 4x/week + daily 10k steps",
+        "Upper/Lower split with 20min conditioning finisher",
+    ],
+    "muscle-gain": [
+        "Push/Pull/Legs (6 days) + 2x/week core work",
+        "Upper/Lower split (4 days) with progressive overload",
+        "Full Body Strength 3x/week + 1 hypertrophy accessory day",
+    ],
+    "beginner": [
+        "Full Body 3x/week, technique-first (50-70% 1RM)",
+        "Light Strength + Mobility, alternating days",
+        "Bodyweight Circuit 3x/week for 4 weeks, then add loading",
+    ],
+}
+
 
 def estimate_calories(program_key: str, weight_kg: float) -> int:
     program = PROGRAMS.get(program_key)
@@ -62,3 +80,18 @@ def estimate_calories(program_key: str, weight_kg: float) -> int:
     if weight_kg <= 0:
         raise ValueError("weight must be positive")
     return int(weight_kg * program["calorie_factor"])
+
+
+def generate_ai_program(program_key: str, seed: int = None) -> dict:
+    """Deterministic when a seed is provided — makes the endpoint testable."""
+    import random as _random
+
+    if program_key not in AI_TEMPLATES:
+        raise KeyError(program_key)
+    rng = _random.Random(seed) if seed is not None else _random
+    template = rng.choice(AI_TEMPLATES[program_key])
+    return {
+        "program": program_key,
+        "generated_plan": template,
+        "calorie_factor": PROGRAMS[program_key]["calorie_factor"],
+    }
