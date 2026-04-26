@@ -32,12 +32,11 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    # Use a disposable Python container; mount the workspace in and run pytest there.
-                    docker run --rm \
-                      -v "$WORKSPACE:/work" \
-                      -w /work \
-                      python:3.12-slim \
-                      sh -c "pip install --quiet --root-user-action=ignore -r requirements-dev.txt && pytest --junitxml=pytest-report.xml"
+                    python3 -m venv .venv
+                    . .venv/bin/activate
+                    pip install --quiet --upgrade pip
+                    pip install --quiet -r requirements-dev.txt
+                    pytest --junitxml=pytest-report.xml
                 '''
             }
             post {
