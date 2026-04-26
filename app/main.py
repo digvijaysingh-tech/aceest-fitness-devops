@@ -7,7 +7,7 @@ from app.programs import PROGRAMS, SITE_METRICS, estimate_calories
 from app.progress import progress_store
 from app.workouts import workout_store
 
-APP_VERSION = "2.2.1"
+APP_VERSION = "2.2.4"
 
 
 def create_app() -> Flask:
@@ -26,6 +26,8 @@ def create_app() -> Flask:
                     "/clients", "/clients/<name>",
                     "/clients/<name>/progress",
                     "/clients/<name>/workouts",
+                    "/clients/<name>/summary",
+                    "/workouts/<id>/exercises",
                 ],
             }
         )
@@ -160,6 +162,49 @@ def create_app() -> Flask:
         except (ValueError, TypeError) as e:
             abort(400, description=str(e))
         return jsonify(workout), 201
+
+    @app.get("/workouts/<int:workout_id>/exercises")
+    def list_exercises(workout_id: int):
+        if workout_store.get(workout_id) is None:
+            abort(404, description=f"workout {workout_id} not found")
+        exs = workout_store.exercises_for(workout_id)
+        return jsonify({"workout_id": workout_id, "count": len(exs), "exercises": exs})
+
+    @app.post("/workouts/<int:workout_id>/exercises")
+    def add_exercise(workout_id: int):
+        data = request.get_json(silent=True) or {}
+        try:
+            ex = workout_store.add_exercise(
+                workout_id=workout_id,
+                name=data.get("name", "").strip(),
+                sets=int(data.get("sets", 0)),
+                reps=int(data.get("reps", 0)),
+                weight=float(data.get("weight", 0)),
+            )
+        except LookupError as e:
+            abort(404, description=str(e))
+        except (ValueError, TypeError) as e:
+            abort(400, description=str(e))
+        return jsonify(ex), 201
+
+    # ---------- Client summary (aggregate) ----------
+    @app.get("/clients/<name>/summary")
+    def client_summary(name: str):
+        record = store.get(name)
+        if record is None:
+            abort(404, description=f"Client '{name}' not found")
+        prog = progress_store.for_client(name)
+        workouts = workout_store.for_client(name)
+        avg_adherence = (
+            sum(e["adherence"] for e in prog) / len(prog) if prog else None
+        )
+        return jsonify({
+            "client": record,
+            "progress_entries": len(prog),
+            "avg_adherence": avg_adherence,
+            "workout_count": len(workouts),
+            "total_minutes": sum(w.get("duration_min") or 0 for w in workouts),
+        })
 
     @app.errorhandler(400)
     def bad_request(err):

@@ -79,5 +79,37 @@ class WorkoutStore:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    def add_exercise(self, workout_id: int, name: str, sets: int,
+                     reps: int, weight: float) -> dict:
+        if not name:
+            raise ValueError("exercise name required")
+        if sets <= 0 or reps <= 0:
+            raise ValueError("sets and reps must be > 0")
+        if weight < 0:
+            raise ValueError("weight must be >= 0")
+        with get_conn(self.db_path) as conn:
+            exists = conn.execute(
+                "SELECT 1 FROM workouts WHERE id=?", (workout_id,)
+            ).fetchone()
+            if not exists:
+                raise LookupError(f"workout {workout_id} not found")
+            cur = conn.execute(
+                """INSERT INTO exercises (workout_id, name, sets, reps, weight)
+                   VALUES (?,?,?,?,?)""",
+                (workout_id, name, sets, reps, weight),
+            )
+            conn.commit()
+            row_id = cur.lastrowid
+            row = conn.execute("SELECT * FROM exercises WHERE id=?", (row_id,)).fetchone()
+        return dict(row)
+
+    def exercises_for(self, workout_id: int) -> List[dict]:
+        with get_conn(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT * FROM exercises WHERE workout_id=? ORDER BY id",
+                (workout_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
 
 workout_store = WorkoutStore()
