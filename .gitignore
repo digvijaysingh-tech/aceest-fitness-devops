@@ -18,3 +18,4 @@ build/
 dist/
 .sonar/
 .scannerwork/
+report/screenshots/_temp/

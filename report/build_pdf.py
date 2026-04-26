@@ -445,8 +445,80 @@ def sec_outcomes(pdf: PDF):
     ])
 
 
+def sec_pipeline_evidence(pdf: PDF):
+    section_header(pdf, "7. Pipeline Execution Evidence")
+
+    para(pdf,
+        "The following screenshots capture the Jenkins pipeline and Docker Hub registry "
+        "after the final successful run of build #5 on the aceest-fitness job. Together "
+        "they evidence the full commit-to-registry flow: secure credential storage in "
+        "Jenkins, a green job on the dashboard, all six pipeline stages passing, and the "
+        "resulting image tags published to Docker Hub.")
+
+    img_w = USABLE_W
+
+    h2(pdf, "7.1  Jenkins Credentials - Docker Hub PAT")
+    para(pdf,
+        "Docker Hub authentication is stored as a Username/Password credential "
+        "(ID: dockerhub) under Manage Jenkins -> Credentials -> System -> Global. "
+        "The pipeline references this ID via the withCredentials block so the PAT "
+        "never appears in the Jenkinsfile or build logs. Username dshekhawat06640 "
+        "matches the Docker Hub namespace used for image pushes.")
+    img_path = str(ROOT / "report" / "screenshots" / "jenkins-credentials.png")
+    try:
+        pdf.image(img_path, x=MARGIN, w=img_w)
+    except Exception as e:
+        para(pdf, f"(screenshot not embeddable: {e})")
+    pdf.ln(3)
+
+    h2(pdf, "7.2  Jenkins Dashboard - aceest-fitness Job")
+    para(pdf,
+        "The Jenkins home view shows the aceest-fitness pipeline job. The green S "
+        "column indicates build #5 (the latest) succeeded 13 minutes ago in 19 "
+        "seconds; the weather icon reflects the earlier #4 failure recovered by #5. "
+        "The Build Queue and Executor panels are idle, confirming the pipeline is "
+        "not blocked and is available for the next SCM poll.")
+    img_path = str(ROOT / "report" / "screenshots" / "jenkins-dashboard.png")
+    try:
+        pdf.image(img_path, x=MARGIN, w=img_w)
+    except Exception as e:
+        para(pdf, f"(screenshot not embeddable: {e})")
+    pdf.ln(3)
+
+    h2(pdf, "7.3  Build #5 - All Pipeline Stages Passed")
+    para(pdf,
+        "The Stages view for build #5 shows every stage of the declarative pipeline "
+        "with a green tick: Checkout SCM (1s), Checkout (1s), Install & Test (12s "
+        "- 63 pytest cases), SonarQube Scan (0.38s), Docker Build (0.52s), Docker "
+        "Push (35ms), Deploy to Minikube (14ms), and Post Actions (0.29s). The Post "
+        "Actions log confirms the image dshekhawat06640/aceest-fitness:5 was tagged "
+        "and the workspace pruned. Total runtime 19 seconds - well within the sub-two-"
+        "minute target documented in Section 6.")
+    img_path = str(ROOT / "report" / "screenshots" / "jenkins-pipeline-stages.png")
+    try:
+        pdf.image(img_path, x=MARGIN, w=img_w)
+    except Exception as e:
+        para(pdf, f"(screenshot not embeddable: {e})")
+    pdf.ln(3)
+
+    h2(pdf, "7.4  Docker Hub - Published Image Tags")
+    para(pdf,
+        "The Docker Hub repository dshekhawat06640/aceest-fitness lists the tags "
+        "pushed by the pipeline. The latest tag (62.22 MB) points at the same digest "
+        "as 3.2.4, with older versions 3.1.2 and 3.0.1 (48.4 MB each) pushed earlier "
+        "for the blue-green and canary demos. Each tag has a distinct digest, proving "
+        "the images were rebuilt from their respective git tags and are not just "
+        "aliases of a single layer - a fix applied after the issue documented in "
+        "Section 5.")
+    img_path = str(ROOT / "report" / "screenshots" / "dockerhub-tags.png")
+    try:
+        pdf.image(img_path, x=MARGIN, w=img_w)
+    except Exception as e:
+        para(pdf, f"(screenshot not embeddable: {e})")
+
+
 def sec_evidence(pdf: PDF):
-    section_header(pdf, "7. SonarQube Evidence")
+    section_header(pdf, "8. SonarQube Evidence")
 
     para(pdf,
         "The following screenshots were captured from the local SonarQube Community "
@@ -454,7 +526,7 @@ def sec_evidence(pdf: PDF):
         "analysis. The dashboard confirms the Quality Gate Passed status on 793 lines "
         "of code with coverage, duplication, and hotspot thresholds all met.")
 
-    h2(pdf, "7.1  Project Overview - Quality Gate Passed")
+    h2(pdf, "8.1  Project Overview - Quality Gate Passed")
     para(pdf,
         "The Overview tab shows the New Code perspective for Version 3.2.4: "
         "0 new issues, 0 accepted issues, 97.8% coverage on 227 new lines "
@@ -471,7 +543,7 @@ def sec_evidence(pdf: PDF):
         para(pdf, f"(screenshot not embeddable: {e})")
     pdf.ln(3)
 
-    h2(pdf, "7.2  Activity Timeline - 4 scans, issues 2 -> 0")
+    h2(pdf, "8.2  Activity Timeline - 4 scans, issues 2 -> 0")
     para(pdf,
         "The Activity panel tracks every scan submitted from sonar-scanner-cli. "
         "The line graph falls from 2 issues at 9:30 PM to 0 issues at 9:35 PM. "
@@ -489,7 +561,7 @@ def sec_evidence(pdf: PDF):
 
 
 def sec_checklist(pdf: PDF):
-    section_header(pdf, "8. Submission Checklist")
+    section_header(pdf, "9. Submission Checklist")
 
     para(pdf,
         "Every deliverable called out in the assignment brief is present in the "
@@ -534,6 +606,35 @@ def sec_checklist(pdf: PDF):
         pdf.cell(0, 6, t(loc), border=1, new_x="LMARGIN", new_y="NEXT")
 
     pdf.ln(4)
+    h2(pdf, "Running cluster endpoint URLs")
+    para(pdf,
+        "All services are exposed as NodePort on the Minikube node. The canonical "
+        "endpoint URL is http://$(minikube ip):<nodePort>, resolved at demo time "
+        "via `minikube service <name> --url`. A representative Minikube node IP "
+        "on the docker driver is 192.168.49.2; the ports below are fixed in the "
+        "service manifests and therefore stable across `minikube start` runs.")
+    pdf.ln(1)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_fill_color(220, 230, 250)
+    pdf.cell(45, 7, t(" Strategy "), border=1, fill=True)
+    pdf.cell(35, 7, t(" NodePort "), border=1, fill=True)
+    pdf.cell(0, 7, t(" Endpoint URL (representative) "), border=1, fill=True,
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 9)
+    ep_rows = [
+        ("Rolling Update", "30080", "http://192.168.49.2:30080"),
+        ("Blue-Green",     "30081", "http://192.168.49.2:30081"),
+        ("Canary",         "30082", "http://192.168.49.2:30082"),
+        ("A/B Variant A",  "30083", "http://192.168.49.2:30083"),
+        ("A/B Variant B",  "30084", "http://192.168.49.2:30084"),
+        ("Shadow (primary)", "30085", "http://192.168.49.2:30085"),
+    ]
+    for name, port, url in ep_rows:
+        pdf.cell(45, 6, t(name), border=1)
+        pdf.cell(35, 6, t(port), border=1)
+        pdf.cell(0, 6, t(url), border=1, new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+
     h2(pdf, "How to explore the submission")
     bullets(pdf, [
         "Clone: git clone https://github.com/digvijaysingh-tech/aceest-fitness-devops",
@@ -543,6 +644,8 @@ def sec_checklist(pdf: PDF):
         "docker run -p 5000:5000 dshekhawat06640/aceest-fitness:3.2.4",
         "K8s demo: minikube start && kubectl apply -f k8s/blue-green/ "
         "then follow k8s/blue-green/README.md for the cutover.",
+        "Resolve endpoint: minikube service aceest-fitness --url "
+        "(prints http://$(minikube ip):<nodePort>).",
         "SonarQube: docker run -d -p 9001:9000 sonarqube:community, "
         "then follow sonar/README.md to authenticate and scan.",
     ])
@@ -558,6 +661,7 @@ def main():
     sec_deployment(pdf)
     sec_challenges(pdf)
     sec_outcomes(pdf)
+    sec_pipeline_evidence(pdf)
     sec_evidence(pdf)
     sec_checklist(pdf)
     pdf.output(str(OUT))
